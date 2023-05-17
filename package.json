@@ -7,11 +7,9 @@
     "bush": "index.mjs"
   },
   "dependencies": {
-    "lodash": "^4.17.21",
     "lodash-es": "^4.17.21",
     "minimist": "^1.2.8",
     "yaml": "^2.2.2",
-    "yamljs": "^0.3.0",
     "zod": "^3.21.4"
   },
   "devDependencies": {
