@@ -11,7 +11,7 @@ import {parse, stringify} from 'yaml';
 
 const require = createRequire(import.meta.url);
 
-let {root: optRoot, config: optConfig, fillGaps: optFillGaps} = minimist(process.argv);
+let {root: optRoot, config: optConfig, 'fill-gaps': optFillGaps} = minimist(process.argv);
 
 if (!optRoot) {
 	optRoot = '.';
