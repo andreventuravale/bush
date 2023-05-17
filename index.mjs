@@ -22,30 +22,30 @@ if (!optConfig) {
 }
 
 const wpath = resolve(optRoot);
-const config = readFileSync(optConfig, 'utf8');
-const json = parse(config);
+const configYaml = readFileSync(optConfig, 'utf8');
+const config = parse(configYaml);
 
 const rootPkg = require(join(wpath, 'package.json'));
 
-rootPkg.name = json.name;
+rootPkg.name = config.name;
 
 writeFileSync(join(wpath, 'package.json'), JSON.stringify(rootPkg, null, 2));
 
-for await (const [wname, wnode] of Object.entries(json.workspaces)) {
+for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 	process.chdir(wpath);
 
 	await shell`mkdir -p \\@${wname}`;
 
-	await visitNodes({json, wname, wnode, packageNodes: wnode.tree, wpath, path: ''});
+	await visitNodes({config, wname, wnode, packageNodes: wnode.tree, wpath, path: ''});
 }
 
-async function visitNodes({json, wname, wnode, packageNodes, wpath, path}) {
+async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
 	for await (const [packageDef, packageNode] of Object.entries(packageNodes ?? {})) {
-		await visitNode({json, wname, wnode, packageDef, packageNode, wpath, path});
+		await visitNode({config, wname, wnode, packageDef, packageNode, wpath, path});
 	}
 }
 
-async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, path}) {
+async function visitNode({config, wname, wnode, packageDef, packageNode, wpath, path}) {
 	const apath = [path, packageDef].filter(Boolean).join('.');
 
 	const packageName = wnode?.names[apath];
@@ -62,7 +62,7 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 
 			process.chdir(join(wpath, `@${wname}`, packageName));
 
-			await shell`if [ ! -e ./package.json ]; then ${json.manager} init; fi`;
+			await shell`if [ ! -e ./package.json ]; then ${config.manager} init; fi`;
 
 			const pkg = await require(join(wpath, `@${wname}`, packageName, 'package.json'));
 
@@ -75,7 +75,7 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 
 				pkg.dependencies = pkg.dependencies ?? {};
 
-				pkg.dependencies[`@${wname}/${rpackageName}`] = `${json.protocol}${`@${wname}/${rpackageName}`}`;
+				pkg.dependencies[`@${wname}/${rpackageName}`] = `${config.protocol}${`@${wname}/${rpackageName}`}`;
 
 				console.log('->', rpath);
 			}
@@ -83,7 +83,7 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 			writeFileSync(join(wpath, `@${wname}`, packageName, 'package.json'), JSON.stringify(pkg, null, 2));
 		} else if (optFillGaps) {
 			if (Object.entries(children).length === 0) {
-				wnode.tree.names[apath] = `# ${wnode.tree.names[apath] ?? '?'}`;
+				wnode.names[apath] = '';
 
 				writeFileSync(optConfig, stringify(config), 'utf8');
 			}
@@ -91,7 +91,7 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 			console.group(`[${packageDef}]`);
 		}
 
-		await visitNodes({json, wname, wnode, packageNodes: packageNode, wpath, path: apath});
+		await visitNodes({config, wname, wnode, packageNodes: packageNode, wpath, path: apath});
 	} finally {
 		console.groupEnd();
 	}
