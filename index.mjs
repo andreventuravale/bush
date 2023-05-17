@@ -2,16 +2,16 @@
 
 import {spawnSync} from 'node:child_process';
 import {readFileSync, writeFileSync} from 'node:fs';
+import {createRequire} from 'node:module';
 import {join, resolve} from 'node:path';
 import process from 'node:process';
-import {createRequire} from 'node:module';
 import minimist from 'minimist';
 import {get} from 'lodash-es';
-import {parse} from 'yaml';
+import {parse, stringify} from 'yaml';
 
 const require = createRequire(import.meta.url);
 
-let {root: optRoot, config: optConfig, list: optList} = minimist(process.argv);
+let {root: optRoot, config: optConfig, fillGaps: optFillGaps} = minimist(process.argv);
 
 if (!optRoot) {
 	optRoot = '.';
@@ -21,7 +21,6 @@ if (!optConfig) {
 	optConfig = './bush.yaml';
 }
 
-const dryRun = Boolean(optList);
 const wpath = resolve(optRoot);
 const config = readFileSync(optConfig, 'utf8');
 const json = parse(config);
@@ -30,16 +29,12 @@ const rootPkg = require(join(wpath, 'package.json'));
 
 rootPkg.name = json.name;
 
-if (!dryRun) {
-	writeFileSync(join(wpath, 'package.json'), JSON.stringify(rootPkg, null, 2));
-}
+writeFileSync(join(wpath, 'package.json'), JSON.stringify(rootPkg, null, 2));
 
 for await (const [wname, wnode] of Object.entries(json.workspaces)) {
 	process.chdir(wpath);
 
-	if (!dryRun) {
-		await shell`mkdir -p \\@${wname}`;
-	}
+	await shell`mkdir -p \\@${wname}`;
 
 	await visitNodes({json, wname, wnode, packageNodes: wnode.tree, wpath, path: ''});
 }
@@ -63,25 +58,17 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 		if (packageName) {
 			process.chdir(join(wpath, `@${wname}`));
 
-			if (!dryRun) {
-				await shell`mkdir -p ${packageName}`;
-			}
+			await shell`mkdir -p ${packageName}`;
 
 			process.chdir(join(wpath, `@${wname}`, packageName));
 
-			if (!dryRun) {
-				await shell`if [ ! -e ./package.json ]; then ${json.manager} init; fi`;
-			}
+			await shell`if [ ! -e ./package.json ]; then ${json.manager} init; fi`;
 
 			const pkg = await require(join(wpath, `@${wname}`, packageName, 'package.json'));
 
 			pkg.name = `@${wname}/${packageName}`;
 
-			if (optList) {
-				console.log(`${apath}: ${packageName ?? '?'}`);
-			} else {
-				console.group(`[${packageDef}]`, ':', pkg.name);
-			}
+			console.group(`[${packageDef}]`, ':', pkg.name);
 
 			for await (const [rpath] of Object.entries(refs)) {
 				const rpackageName = wnode?.names[rpath];
@@ -90,17 +77,15 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 
 				pkg.dependencies[`@${wname}/${rpackageName}`] = `${json.protocol}${`@${wname}/${rpackageName}`}`;
 
-				if (!optList) {
-					console.log('->', rpath);
-				}
+				console.log('->', rpath);
 			}
 
-			if (!dryRun) {
-				writeFileSync(join(wpath, `@${wname}`, packageName, 'package.json'), JSON.stringify(pkg, null, 2));
-			}
-		} else if (optList) {
+			writeFileSync(join(wpath, `@${wname}`, packageName, 'package.json'), JSON.stringify(pkg, null, 2));
+		} else if (optFillGaps) {
 			if (Object.entries(children).length === 0) {
-				console.log(`${apath}: ?`);
+				wnode.tree.names[apath] = `# ${wnode.tree.names[apath] ?? '?'}`;
+
+				writeFileSync(optConfig, stringify(config), 'utf8');
 			}
 		} else {
 			console.group(`[${packageDef}]`);
