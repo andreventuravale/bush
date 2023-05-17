@@ -53,13 +53,11 @@ async function visitNodes({json, wname, wnode, packageNodes, wpath, path}) {
 async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, path}) {
 	const apath = [path, packageDef].filter(Boolean).join('.');
 
-	if (optList) {
-		console.log(apath);
-	}
-
 	const packageName = wnode?.names[apath];
 
-	const refs = get(wnode?.references, apath);
+	const children = get(wnode?.tree, apath) ?? {};
+
+	const refs = get(wnode?.references, apath) ?? {};
 
 	try {
 		if (packageName) {
@@ -79,11 +77,13 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 
 			pkg.name = `@${wname}/${packageName}`;
 
-			if (!optList) {
+			if (optList) {
+				console.log(`${apath}: ${packageName ?? '?'}`);
+			} else {
 				console.group(`[${packageDef}]`, ':', pkg.name);
 			}
 
-			for await (const [rpath] of Object.entries(refs ?? {})) {
+			for await (const [rpath] of Object.entries(refs)) {
 				const rpackageName = wnode?.names[rpath];
 
 				pkg.dependencies = pkg.dependencies ?? {};
@@ -91,14 +91,18 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 				pkg.dependencies[`@${wname}/${rpackageName}`] = `${json.protocol}${`@${wname}/${rpackageName}`}`;
 
 				if (!optList) {
-					console.log('->', rpackageName);
+					console.log('->', rpath);
 				}
 			}
 
 			if (!dryRun) {
 				writeFileSync(join(wpath, `@${wname}`, packageName, 'package.json'), JSON.stringify(pkg, null, 2));
 			}
-		} else if (!optList) {
+		} else if (optList) {
+			if (Object.entries(children).length === 0) {
+				console.log(`${apath}: ?`);
+			}
+		} else {
 			console.group(`[${packageDef}]`);
 		}
 
