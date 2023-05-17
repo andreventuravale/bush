@@ -40,13 +40,13 @@ for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 }
 
 async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
-	for await (const [packageDef, packageNode] of Object.entries(packageNodes ?? {})) {
-		await visitNode({config, wname, wnode, packageDef, packageNode, wpath, path});
+	for await (const [palias, packageNode] of Object.entries(packageNodes ?? {})) {
+		await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
 	}
 }
 
-async function visitNode({config, wname, wnode, packageDef, packageNode, wpath, path}) {
-	const apath = [path, packageDef].filter(Boolean).join('.');
+async function visitNode({config, wname, wnode, palias, packageNode, wpath, path}) {
+	const apath = [path, palias].filter(Boolean).join('.');
 
 	const packageName = wnode?.names[apath];
 
@@ -68,7 +68,7 @@ async function visitNode({config, wname, wnode, packageDef, packageNode, wpath, 
 
 			pkg.name = `@${wname}/${packageName}`;
 
-			console.group(`[${packageDef}]`, ':', pkg.name);
+			console.group(`[${palias}]`, ':', pkg.name);
 
 			for await (const [rpath] of Object.entries(refs)) {
 				const rpackageName = wnode?.names[rpath];
@@ -88,7 +88,7 @@ async function visitNode({config, wname, wnode, packageDef, packageNode, wpath, 
 				writeFileSync(optConfig, stringify(config), 'utf8');
 			}
 		} else {
-			console.group(`[${packageDef}]`);
+			console.group(`[${palias}]`);
 		}
 
 		await visitNodes({config, wname, wnode, packageNodes: packageNode, wpath, path: apath});
