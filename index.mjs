@@ -17,6 +17,8 @@ if (!optRoot) {
 	optRoot = '.';
 }
 
+const originalDir = process.cwd();
+
 if (!optConfig) {
 	optConfig = './bush.yaml';
 }
@@ -85,7 +87,9 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 			if (Object.entries(children).length === 0) {
 				wnode.names[apath] = '';
 
-				writeFileSync(optConfig, stringify(config), 'utf8');
+				writeFileSync(join(originalDir, optConfig), stringify(config, {
+					nullStr: '',
+				}), 'utf8');
 			}
 		} else {
 			console.group(`[${palias}]`);
