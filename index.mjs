@@ -80,7 +80,7 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 			pkg.name = `@${wname}/${packageName}`;
 
 			if (!optList) {
-				console.group(`[${packageName}]`, ':', pkg.name);
+				console.group(`[${packageDef}]`, ':', pkg.name);
 			}
 
 			for await (const [rpath] of Object.entries(refs ?? {})) {
@@ -99,7 +99,7 @@ async function visitNode({json, wname, wnode, packageDef, packageNode, wpath, pa
 				writeFileSync(join(wpath, `@${wname}`, packageName, 'package.json'), JSON.stringify(pkg, null, 2));
 			}
 		} else if (!optList) {
-			console.group(`[${packageName}]`);
+			console.group(`[${packageDef}]`);
 		}
 
 		await visitNodes({json, wname, wnode, packageNodes: packageNode, wpath, path: apath});
