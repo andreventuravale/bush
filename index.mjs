@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 
-import {spawnSync} from 'node:child_process';
-import {readFileSync, writeFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import {join, resolve} from 'node:path';
+import {readFileSync, writeFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
 import process from 'node:process';
 import minimist from 'minimist';
-import {get} from 'lodash-es';
 import {parse, stringify} from 'yaml';
+import {get} from 'lodash-es';
 
 const require = createRequire(import.meta.url);
 
