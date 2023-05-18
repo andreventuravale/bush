@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import {spawnSync} from 'node:child_process';
-import {readFileSync, writeFileSync} from 'node:fs';
+import {existsSync, readFileSync, writeFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 import process from 'node:process';
 import minimist from 'minimist';
@@ -69,25 +69,36 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 
 			await shell`mkdir -p ${packageName}`;
 
-			process.chdir(join(wpath, `@${wname}`, packageName));
-
-			await shell`if [ ! -e ./package.json ]; then ${config.manager} init; fi`;
-
 			const pkgDir = join(wpath, `@${wname}`, packageName);
 
-			const pkg = await jsonFile(
-				join(pkgDir, 'package.json'),
-			);
+			process.chdir(pkgDir);
+
+			const pkgPath = join(pkgDir, 'package.json');
+
+			if (!existsSync('package.json')) {
+				const tmpl = JSON.parse(config.template);
+
+				tmpl.name = `@${wname}/${packageName}`;
+
+				writeFileSync(
+					pkgPath,
+					JSON.stringify(tmpl, null, 2),
+					'utf8',
+				);
+			}
+
+			const pkg = await jsonFile(pkgPath);
 
 			pkg.name = `@${wname}/${packageName}`;
 
 			console.group(`[${palias}]`, ':', pkg.name);
 
-			const [, attributes] = Object
+			const attributesList = Object
 				.entries(wnode?.attributes ?? {})
-				.find(([pattern]) => new RegExp(pattern, 'gim').test(apath)) ?? [];
+				.filter(([pattern]) => new RegExp(pattern, 'gim').test(apath))
+				.map(([, attributes]) => attributes);
 
-			if (attributes) {
+			for await (const attributes of attributesList) {
 				for await (const [ref, {'save-peer': savePeer}] of Object.entries(attributes.references ?? {})) {
 					await shell`${
 						[config.manager, 'install', `${ref}@${config.references?.[ref]?.version ?? 'latest'}`, '--save', yn(savePeer) ? '--save-peer' : '']
