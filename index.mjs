@@ -8,6 +8,7 @@ import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { parse, stringify } from 'yaml'
 import yn from 'yn'
+import sortKeys from 'sort-keys'
 
 const { readFile, stat, writeFile } = fsPromises
 
@@ -199,7 +200,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
       await pkg.save()
 
-      console.group(`[${palias}]`, ':', pkg.name ?? '?')
+      console.group(`[${palias}]`, ':', await pkg.get(({ name }) => name) ?? '?')
 
       const attributesList = Object
         .entries(wnode?.attributes ?? {})
@@ -209,6 +210,14 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       for await (const attributes of attributesList) {
         await assignDeps(config, pkg, attributes.references, apath)
       }
+
+      await pkg.modify(async content => {
+        content.dependencies = sortKeys(content.dependencies)
+        if (content.devDependencies) { content.devDependencies = sortKeys(content.devDependencies) }
+        if (content.peerDependencies) { content.peerDependencies = sortKeys(content.peerDependencies) }
+      })
+
+      await pkg.save()
     } else if (optFillGaps) {
       if (Object.entries(children).length === 0) {
         wnode.names[apath] = ''
@@ -247,6 +256,16 @@ async function makeFile (options, parse, serialize) {
       get dir () { return dirname(path) },
 
       get path () { return path },
+
+      async get (action) {
+        if (!action) {
+          return await getContent()
+        }
+
+        return await action(
+          await getContent()
+        )
+      },
 
       async invalidate () {
         content = null

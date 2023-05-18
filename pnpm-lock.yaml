@@ -3,6 +3,7 @@ lockfileVersion: 5.4
 specifiers:
   lodash-es: ^4.17.21
   minimist: ^1.2.8
+  sort-keys: ^5.0.0
   standard: ^17.0.0
   yaml: ^2.2.2
   yn: ^5.0.0
@@ -11,6 +12,7 @@ specifiers:
 dependencies:
   lodash-es: 4.17.21
   minimist: 1.2.8
+  sort-keys: 5.0.0
   yaml: 2.2.2
   yn: 5.0.0
   zod: 3.21.4
@@ -954,6 +956,11 @@ packages:
     engines: {node: '>=8'}
     dev: true
 
+  /is-plain-obj/4.1.0:
+    resolution: {integrity: sha512-+Pgi+vMuUNkJyExiMBt5IlFoMyKnr5zhJ4Uspz58WOhBF5QoIZkFyNHIbBAtHwzVAgk5RtndVNsDRN61/mmDqg==}
+    engines: {node: '>=12'}
+    dev: false
+
   /is-regex/1.1.4:
     resolution: {integrity: sha512-kvRdxDsxZjhzUX07ZnLydzS1TU/TJlTUHHY4YLL87e37oUA49DfkLqgy+VjFocowy29cKvcSiu+kIv728jTTVg==}
     engines: {node: '>= 0.4'}
@@ -1400,6 +1407,13 @@ packages:
       get-intrinsic: 1.2.1
       object-inspect: 1.12.3
     dev: true
+
+  /sort-keys/5.0.0:
+    resolution: {integrity: sha512-Pdz01AvCAottHTPQGzndktFNdbRA75BgOfeT1hH+AMnJFv8lynkPi42rfeEhpx1saTEI3YNMWxfqu0sFD1G8pw==}
+    engines: {node: '>=12'}
+    dependencies:
+      is-plain-obj: 4.1.0
+    dev: false
 
   /standard-engine/15.0.0:
     resolution: {integrity: sha512-4xwUhJNo1g/L2cleysUqUv7/btn7GEbYJvmgKrQ2vd/8pkTmN8cpqAZg+BT8Z1hNeEH787iWUdOpL8fmApLtxA==}

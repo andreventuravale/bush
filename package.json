@@ -9,6 +9,7 @@
   "dependencies": {
     "lodash-es": "^4.17.21",
     "minimist": "^1.2.8",
+    "sort-keys": "^5.0.0",
     "yaml": "^2.2.2",
     "yn": "^5.0.0",
     "zod": "^3.21.4"
