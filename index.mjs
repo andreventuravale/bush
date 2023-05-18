@@ -45,6 +45,8 @@ await rootPkg.modify(async content => {
   content.name = config.name
 })
 
+await rootPkg.save()
+
 await installDeps(config, rootPkg, config.root?.attributes?.references)
 
 for await (const [wname, wnode] of Object.entries(config.workspaces)) {
@@ -101,6 +103,7 @@ async function installDeps (config, pkg, refs) {
       } = {}
     ] of Object.entries(refs ?? {})
   ) {
+    debugger
     const isDevGlobal = config.references?.[ref]?.['is-dev']
 
     const isDev = isDevLocal ?? isDevGlobal ?? 'no'
@@ -120,8 +123,6 @@ async function installDeps (config, pkg, refs) {
 
     await pkg.invalidate()
   }
-
-  await pkg.save()
 }
 
 async function visitNodes ({ config, wname, wnode, packageNodes, wpath, path }) {
@@ -215,8 +216,19 @@ async function makeFile (options, parse, serialize) {
   return path => {
     let content = null
 
+    const getContent = async () => {
+      if (content === null) {
+        content = await parse(
+          await readFile(path, options)
+        )
+      }
+
+      return content
+    }
+
     return {
       get dir () { return dirname(path) },
+
       get path () { return path },
 
       async invalidate () {
@@ -224,19 +236,17 @@ async function makeFile (options, parse, serialize) {
       },
 
       async modify (action) {
-        if (content === null) {
-          content = await parse(
-            await readFile(path, options)
-          )
-        }
-
-        await action(content)
+        await action(
+          await getContent()
+        )
       },
 
       async save () {
         await writeFile(
           path,
-          await serialize(content),
+          await serialize(
+            await getContent()
+          ),
           options
         )
 
