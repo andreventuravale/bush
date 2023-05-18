@@ -62,12 +62,12 @@ for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 }
 
 async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
-	Object.entries(packageNodes ?? {}).map(async ([palias, packageNode]) => {
+	for await (const [palias, packageNode] of (packageNodes ?? {})) {
 		await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
-	})
+	}
 }
 
-// async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
+// Async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
 // 	await Promise.all(
 // 		Object.entries(packageNodes ?? {}).map(async ([palias, packageNode]) => {
 // 			await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
