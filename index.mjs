@@ -7,7 +7,7 @@ import {spawnSync} from 'node:child_process';
 import process from 'node:process';
 import minimist from 'minimist';
 import {parse, stringify} from 'yaml';
-import {get} from 'lodash-es';
+import {escapeRegExp, get} from 'lodash-es';
 
 const require = createRequire(import.meta.url);
 
@@ -71,6 +71,20 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 			pkg.name = `@${wname}/${packageName}`;
 
 			console.group(`[${palias}]`, ':', pkg.name);
+
+			const [, attributes] = Object
+				.entries(wnode?.attributes ?? {})
+				.find(([pattern]) => {
+					const regex = escapeRegExp(pattern.slice(1, -1));
+
+					return new RegExp(regex, 'gim').test(apath);
+				}) ?? [];
+
+			if (attributes) {
+				for await (const [ref, version] of Object.entries(attributes.references ?? {})) {
+					await shell`${config.manager} install ${ref}@${version} --save`;
+				}
+			}
 
 			for await (const [rpath] of Object.entries(refs)) {
 				const rpackageName = wnode?.names[rpath];
