@@ -110,20 +110,26 @@ async function assignDeps (config, pkg, refs) {
 
     const prop = isDev || savePeer ? 'devDependencies' : 'dependencies'
 
+    const name = unescapePackageName(ref)
+
     await pkg.modify(async content => {
       content[prop] = content[prop] ?? {}
 
-      content[prop][ref] = `${config.references?.[ref]?.version ?? 'latest'}`
+      content[prop][name] = `${config.references?.[name]?.version ?? 'latest'}`
 
       if (savePeer) {
         content.peerDependencies = content.peerDependencies ?? {}
 
-        content.peerDependencies[ref] = `${config.references?.[ref]?.version ?? 'latest'}`
+        content.peerDependencies[name] = `${config.references?.[name]?.version ?? 'latest'}`
       }
     })
 
     await pkg.save()
   }
+}
+
+function unescapePackageName (name) {
+  return name.replace('\\@', '@')
 }
 
 async function visitNodes ({ config, wname, wnode, packageNodes, wpath, path }) {
