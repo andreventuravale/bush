@@ -62,7 +62,7 @@ for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 }
 
 async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
-	for await (const [palias, packageNode] of (packageNodes ?? {})) {
+	for await (const [palias, packageNode] of Object.entries(packageNodes ?? {})) {
 		await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
 	}
 }
