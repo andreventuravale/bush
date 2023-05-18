@@ -153,24 +153,24 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
   const apath = [path, palias].filter(Boolean).join('.')
 
-  const pkgName = wnode?.names[apath]
-
-  const pkgDir = join(wpath, `@${wname}`, flat ? pkgName : fspath)
-
-  const pkgJsonPath = join(pkgDir, 'package.json')
+  const pkgName = getPkgName(flat, wnode, wnode.names[apath])
 
   const children = get(wnode?.tree, apath) ?? {}
 
-  const refs = get(wnode?.references, apath) ?? {}
-
   try {
-    if (pkgName) {
+    if (wnode.names[apath]) {
+      const pkgDir = join(wpath, `@${wname}`, flat ? pkgName : fspath)
+
+      const pkgJsonPath = join(pkgDir, 'package.json')
+
+      const refs = get(wnode?.references, apath) ?? {}
+
       await shell({ cwd: join(wpath, `@${wname}`) })`mkdir -p ${pkgDir}`
 
       if (!await fileExists(pkgJsonPath)) {
         const tmpl = JSON.parse(config.template)
 
-        tmpl.name = `@${wname}/${[wnode.prefix, pkgName].filter(Boolean).join('-')}`
+        tmpl.name = `@${wname}/${pkgName}`
 
         await writeFile(
           pkgJsonPath,
@@ -186,12 +186,12 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       })
 
       for await (const [rpath] of Object.entries(refs)) {
-        const rpackageName = wnode?.names[rpath]
+        const rpkgName = getPkgName(flat, wnode, wnode?.names[rpath])
 
         await pkg.modify(async content => {
           content.dependencies = content.dependencies ?? {}
 
-          content.dependencies[`@${wname}/${rpackageName}`] = `${config.protocol}${`@${wname}/${rpackageName}`}`
+          content.dependencies[`@${wname}/${rpkgName}`] = `${config.protocol}${`@${wname}/${rpkgName}`}`
         })
 
         console.log('->', rpath)
@@ -199,7 +199,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
       await pkg.save()
 
-      console.group(`[${palias}]`, ':', pkg.name)
+      console.group(`[${palias}]`, ':', pkg.name ?? '?')
 
       const attributesList = Object
         .entries(wnode?.attributes ?? {})
@@ -223,6 +223,10 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
   } finally {
     console.groupEnd()
   }
+}
+
+function getPkgName (flat, wnode, name) {
+  return [yn(flat) ? wnode['flat-prefix'] : '', name].filter(Boolean).join('-')
 }
 
 async function makeFile (options, parse, serialize) {
