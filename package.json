@@ -13,14 +13,14 @@
     "yn": "^5.0.0",
     "zod": "^3.21.4"
   },
-  "devDependencies": {
-    "xo": "^0.54.2"
-  },
   "main": "index.mjs",
   "name": "bush",
   "scripts": {
-    "lint": "xo --fix"
+    "lint": "standard --fix"
   },
   "type": "module",
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "devDependencies": {
+    "standard": "^17.0.0"
+  }
 }
