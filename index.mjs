@@ -88,9 +88,12 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 				.find(([pattern]) => {
 					const regex = escapeRegExp(
 						pattern
-							.replace(/\*/g, '17b4b1d2-0463-5405-9f6f-b290daca08bb'),
+							.replace(/\*/g, '17b4b1d2-0463-5405-9f6f-b290daca08bb')
+							.replace(/\.$/g, '751e2e0a-c3ae-5258-90ab-cadb40b7a42f'),
 					)
-						.replace('17b4b1d2-0463-5405-9f6f-b290daca08bb', '.*');
+						.replace('17b4b1d2-0463-5405-9f6f-b290daca08bb', '\\\\w+')
+						.replace('751e2e0a-c3ae-5258-90ab-cadb40b7a42f', '$');
+
 					return new RegExp(regex, 'gim').test(apath);
 				}) ?? [];
 
