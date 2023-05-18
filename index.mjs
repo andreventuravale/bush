@@ -93,7 +93,6 @@ function shell ({ cwd = process.cwd() }) {
 }
 
 async function installDeps (config, pkg, refs) {
-  debugger
   for await (
     const [
       ref,
@@ -103,7 +102,6 @@ async function installDeps (config, pkg, refs) {
       } = {}
     ] of Object.entries(refs ?? {})
   ) {
-    debugger
     const isDevGlobal = config.references?.[ref]?.['is-dev']
 
     const isDev = isDevLocal ?? isDevGlobal ?? 'no'
@@ -156,7 +154,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
       const pkgPath = join(pkgDir, 'package.json')
 
-      if (!await fileExists('package.json')) {
+      if (!await fileExists(pkgPath)) {
         const tmpl = JSON.parse(config.template)
 
         tmpl.name = `@${wname}/${packageName}`
@@ -256,14 +254,12 @@ async function makeFile (options, parse, serialize) {
   }
 }
 
-export function fileExists () {
-  return async path => {
-    try {
-      await stat(path)
+export async function fileExists (path) {
+  try {
+    await stat(path)
 
-      return true
-    } catch {
-      return false
-    }
+    return true
+  } catch {
+    return false
   }
 }
