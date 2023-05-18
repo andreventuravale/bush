@@ -2,7 +2,7 @@
 
 import { spawn } from 'node:child_process'
 import { promises as fsPromises } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import minimist from 'minimist'
 import { get } from 'lodash-es'
@@ -27,7 +27,9 @@ const wpath = resolve(optRoot)
 
 const configYaml = await readFile(optConfig, 'utf8')
 
-const config = parse(configYaml)
+const config = parse(configYaml, {
+  reviver: (key, value) => value ?? ''
+})
 
 const jsonFile = await makeFile(
   'utf8',
@@ -46,63 +48,64 @@ await rootPkg.modify(async content => {
 await installDeps(config, rootPkg, config.root?.attributes?.references)
 
 for await (const [wname, wnode] of Object.entries(config.workspaces)) {
-  process.chdir(wpath)
-
-  await shell`mkdir -p \\@${wname}`
+  await shell({ cwd: wpath })`mkdir -p \\@${wname}`
 
   await visitNodes({ config, wname, wnode, packageNodes: wnode.tree, wpath, path: '' })
 }
 
-function shell (tpl = [], ...args) {
-  return new Promise((resolve, reject) => {
-    const a = tpl.slice(0)
-    const b = args.slice(0)
-    const script = []
+function shell ({ cwd = process.cwd() }) {
+  return function (tpl = [], ...args) {
+    return new Promise((resolve, reject) => {
+      const a = tpl.slice(0)
+      const b = args.slice(0)
+      const script = []
 
-    while (a.length > 0 || b.length > 0) {
-      script.push(
-        a.shift() ?? '',
-        b.shift() ?? ''
-      )
-    }
-
-    const cmd = script.join('')
-
-    console.log('$', cmd)
-
-    const proc = spawn(cmd, { cwd: process.cwd(), stdio: 'inherit', shell: true })
-
-    let error
-
-    proc.on('error', error_ => {
-      error = error_
-    })
-
-    proc.on('close', code => {
-      if (code === 0) {
-        resolve()
-      } else {
-        reject(error)
+      while (a.length > 0 || b.length > 0) {
+        script.push(
+          a.shift() ?? '',
+          b.shift() ?? ''
+        )
       }
+
+      const cmd = script.join('')
+
+      console.log('$', cmd)
+
+      const proc = spawn(cmd, { cwd, stdio: 'inherit', shell: true })
+
+      let error
+
+      proc.on('error', error_ => {
+        error = error_
+      })
+
+      proc.on('close', code => {
+        if (code === 0) {
+          resolve()
+        } else {
+          reject(error)
+        }
+      })
     })
-  })
+  }
 }
 
 async function installDeps (config, pkg, refs) {
+  debugger
   for await (
     const [
       ref,
       {
         'is-dev': isDevLocal = 'no',
         'save-peer': savePeer = 'no'
-      }
+      } = {}
     ] of Object.entries(refs ?? {})
   ) {
     const isDevGlobal = config.references?.[ref]?.['is-dev']
 
     const isDev = isDevLocal ?? isDevGlobal ?? 'no'
 
-    await shell`${[
+    await shell({ cwd: pkg.dir })`${[
       config.manager,
       'add',
       `${ref}@${config.references?.[ref]?.version ?? 'latest'}`,
@@ -146,13 +149,9 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
   try {
     if (packageName) {
-      process.chdir(join(wpath, `@${wname}`))
-
-      await shell`mkdir -p ${packageName}`
+      await shell({ cwd: join(wpath, `@${wname}`) })`mkdir -p ${packageName}`
 
       const pkgDir = join(wpath, `@${wname}`, packageName)
-
-      process.chdir(pkgDir)
 
       const pkgPath = join(pkgDir, 'package.json')
 
@@ -182,7 +181,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
         .map(([, attributes]) => attributes)
 
       for await (const attributes of attributesList) {
-        await installDeps(pkg, attributes.references, apath)
+        await installDeps(config, pkg, attributes.references, apath)
       }
 
       for await (const [rpath] of Object.entries(refs)) {
@@ -217,9 +216,13 @@ async function makeFile (options, parse, serialize) {
     let content = null
 
     return {
+      get dir () { return dirname(path) },
+      get path () { return path },
+
       async invalidate () {
         content = null
       },
+
       async modify (action) {
         if (content === null) {
           content = await parse(
@@ -229,6 +232,7 @@ async function makeFile (options, parse, serialize) {
 
         await action(content)
       },
+
       async save () {
         await writeFile(
           path,
