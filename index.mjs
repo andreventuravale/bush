@@ -11,16 +11,6 @@ import yn from 'yn';
 
 const {readFile, stat, writeFile} = fsPromises;
 
-const fileExists = async path => {
-	try {
-		await stat(path);
-
-		return true;
-	} catch {
-		return false;
-	}
-};
-
 let {root: optRoot, config: optConfig, 'fill-gaps': optFillGaps} = minimist(process.argv);
 
 if (!optRoot) {
@@ -34,7 +24,9 @@ if (!optConfig) {
 }
 
 const wpath = resolve(optRoot);
+
 const configYaml = await readFile(optConfig, 'utf8');
+
 const config = parse(configYaml);
 
 const jsonFile = await makeFile(
@@ -51,7 +43,7 @@ await rootPkg.modify(async content => {
 	content.name = config.name;
 });
 
-await rootPkg.save();
+await installDeps(config, rootPkg, config.root?.attributes?.references);
 
 for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 	process.chdir(wpath);
@@ -61,13 +53,81 @@ for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 	await visitNodes({config, wname, wnode, packageNodes: wnode.tree, wpath, path: ''});
 }
 
+function shell(tpl = [], ...args) {
+	return new Promise((resolve, reject) => {
+		const a = tpl.slice(0);
+		const b = args.slice(0);
+		const script = [];
+
+		while (a.length > 0 || b.length > 0) {
+			script.push(
+				a.shift() ?? '',
+				b.shift() ?? '',
+			);
+		}
+
+		const cmd = script.join('');
+
+		console.log('$', cmd);
+
+		const proc = spawn(cmd, {cwd: process.cwd(), stdio: 'inherit', shell: true});
+
+		let error;
+
+		proc.on('error', error_ => {
+			error = error_;
+		});
+
+		proc.on('close', 	code => {
+			if (code === 0) {
+				resolve();
+			} else {
+				reject(error);
+			}
+		});
+	});
+}
+
+async function installDeps(config, pkg, refs) {
+	for await (
+		const [
+			ref,
+			{
+				'is-dev': isDevLocal = 'no',
+				'save-peer': savePeer = 'no',
+			},
+		] of Object.entries(refs ?? {})
+	) {
+		const isDevGlobal = config.references?.[ref]?.['is-dev'];
+
+		const isDev = isDevLocal ?? isDevGlobal ?? 'no';
+
+		await shell`${[
+			config.manager,
+			'add',
+			`${ref}@${config.references?.[ref]?.version ?? 'latest'}`,
+			yn(savePeer)
+				? '--save-peer'
+				: (yn(isDev)
+					? '--save-dev'
+					: '--save-prod'),
+		]
+			.filter(Boolean)
+			.join(' ')}`;
+
+		await pkg.invalidate();
+	}
+
+	await pkg.save();
+}
+
 async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
 	for await (const [palias, packageNode] of Object.entries(packageNodes ?? {})) {
 		await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
 	}
 }
 
-// async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
+// Async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
 // 	await Promise.all(
 // 		Object.entries(packageNodes ?? {}).map(async ([palias, packageNode]) => {
 // 			await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
@@ -117,33 +177,12 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 			console.group(`[${palias}]`, ':', pkg.name);
 
 			const attributesList = Object
-				.entries(wnode?.attributes ?? {})
-				.filter(([pattern]) => new RegExp(pattern, 'gim').test(apath))
+				.entries(wnode?.attributes?.references ?? {})
+				.filter(([pattern]) => apath && new RegExp(pattern, 'gim').test(apath))
 				.map(([, attributes]) => attributes);
 
 			for await (const attributes of attributesList) {
-				for await (const [ref, {'is-dev': isDevLocal = 'no', 'save-peer': savePeer = 'no'}] of Object.entries(attributes.references ?? {})) {
-					const isDevGlobal = config.references?.[ref]?.['is-dev'];
-
-					const isDev = isDevLocal ?? isDevGlobal ?? 'no';
-
-					await shell`${
-						[
-							config.manager,
-							'add',
-							`${ref}@${config.references?.[ref]?.version ?? 'latest'}`,
-							yn(savePeer)
-								? '--save-peer'
-								: yn(isDev) 
-								? '--save-dev' 
-								: '--save-prod',
-						]
-							.filter(Boolean)
-							.join(' ')
-					}`;
-
-					await pkg.invalidate();
-				}
+				await installDeps(pkg, attributes.references, apath);
 			}
 
 			for await (const [rpath] of Object.entries(refs)) {
@@ -173,41 +212,6 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 	}
 }
 
-function shell(tpl = [], ...args) {
-	return new Promise((resolve, reject) => {
-		const a = tpl.slice(0);
-		const b = args.slice(0);
-		const script = [];
-
-		while (a.length > 0 || b.length > 0) {
-			script.push(
-				a.shift() ?? '',
-				b.shift() ?? '',
-			);
-		}
-
-		const cmd = script.join('');
-
-		console.log('$', cmd);
-
-		const proc = spawn(cmd, {cwd: process.cwd(), stdio: 'inherit', shell: true});
-
-		let error;
-
-		proc.on('error', error_ => {
-			error = error_;
-		});
-
-		proc.on('close', 	code => {
-			if (code === 0) {
-				resolve();
-			} else {
-				reject(error);
-			}
-		});
-	});
-}
-
 async function makeFile(options, parse, serialize) {
 	return path => {
 		let content = null;
@@ -235,5 +239,17 @@ async function makeFile(options, parse, serialize) {
 				await this.invalidate();
 			},
 		};
+	};
+}
+
+export function fileExists() {
+	return async path => {
+		try {
+			await stat(path);
+
+			return true;
+		} catch {
+			return false;
+		}
 	};
 }
