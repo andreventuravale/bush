@@ -75,8 +75,11 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 			const [, attributes] = Object
 				.entries(wnode?.attributes ?? {})
 				.find(([pattern]) => {
-					const regex = escapeRegExp(pattern.slice(1, -1));
-
+					const regex = escapeRegExp(
+						pattern
+							.replace(/\*/g, '17b4b1d2-0463-5405-9f6f-b290daca08bb'),
+					)
+						.replace('17b4b1d2-0463-5405-9f6f-b290daca08bb', '.*');
 					return new RegExp(regex, 'gim').test(apath);
 				}) ?? [];
 
