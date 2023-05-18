@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
+import { get } from 'lodash-es'
+import minimist from 'minimist'
 import { spawn } from 'node:child_process'
 import { promises as fsPromises } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import minimist from 'minimist'
-import { get } from 'lodash-es'
 import { parse, stringify } from 'yaml'
 import yn from 'yn'
 
@@ -58,14 +58,14 @@ for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 function shell ({ cwd = process.cwd() }) {
   return function (tpl = [], ...args) {
     return new Promise((resolve, reject) => {
-      const a = tpl.slice(0)
-      const b = args.slice(0)
+      const tplParts = tpl.slice(0)
+      const argParts = args.slice(0)
       const script = []
 
-      while (a.length > 0 || b.length > 0) {
+      while (tplParts.length > 0 || argParts.length > 0) {
         script.push(
-          a.shift() ?? '',
-          b.shift() ?? ''
+          tplParts.shift() ?? '',
+          argParts.shift() ?? ''
         )
       }
 
