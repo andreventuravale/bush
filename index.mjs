@@ -116,7 +116,11 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 				.map(([, attributes]) => attributes);
 
 			for await (const attributes of attributesList) {
-				for await (const [ref, {'is-dev': isDev = 'no', 'save-peer': savePeer = 'no'}] of Object.entries(attributes.references ?? {})) {
+				for await (const [ref, {'is-dev': isDevLocal = 'no', 'save-peer': savePeer = 'no'}] of Object.entries(attributes.references ?? {})) {
+					const isDevGlobal = config.references?.[ref]?.['is-dev'];
+
+					const isDev = isDevLocal ?? isDevGlobal ?? 'no';
+
 					await shell`${
 						[
 							config.manager,
@@ -205,13 +209,19 @@ async function makeFile(options, parse, serialize) {
 			},
 			async modify(action) {
 				if (content === null) {
-					content = await parse(await readFile(path, options));
+					content = await parse(
+						await readFile(path, options),
+					);
 				}
 
 				await action(content);
 			},
 			async save() {
-				await	writeFile(path, await serialize(content), options);
+				await	writeFile(
+					path,
+					await serialize(content),
+					options,
+				);
 
 				await this.invalidate();
 			},
