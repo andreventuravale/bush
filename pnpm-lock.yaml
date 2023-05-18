@@ -5,12 +5,14 @@ specifiers:
   minimist: ^1.2.8
   xo: ^0.54.2
   yaml: ^2.2.2
+  yn: ^5.0.0
   zod: ^3.21.4
 
 dependencies:
   lodash-es: 4.17.21
   minimist: 1.2.8
   yaml: 2.2.2
+  yn: 5.0.0
   zod: 3.21.4
 
 devDependencies:
@@ -2801,6 +2803,11 @@ packages:
     resolution: {integrity: sha512-tVpsJW7DdjecAiFpbIB1e3qxIQsE6NoPc5/eTdrbbIC4h0LVsWhnoa3g+m2HclBIujHzsxZ4VJVA+GUuc2/LBw==}
     engines: {node: '>=12'}
     dev: true
+
+  /yn/5.0.0:
+    resolution: {integrity: sha512-+l37+9TyGEsyxGLaTg6QgYy5KnOp74ZZl4dPFLQpBWSkO99uBC5jnS0pOGwXFViPbiaEtWbParH2KrgWWF2duQ==}
+    engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+    dev: false
 
   /yocto-queue/0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}

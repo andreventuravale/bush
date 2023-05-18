@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 
-import {createRequire} from 'node:module';
-import {join, resolve} from 'node:path';
-import {readFileSync, writeFileSync} from 'node:fs';
 import {spawnSync} from 'node:child_process';
+import {readFileSync, writeFileSync} from 'node:fs';
+import {join, resolve} from 'node:path';
 import process from 'node:process';
 import minimist from 'minimist';
-import {parse, stringify} from 'yaml';
 import {escapeRegExp, get} from 'lodash-es';
-
-const require = createRequire(import.meta.url);
+import {parse, stringify} from 'yaml';
+import yn from 'yn';
 
 let {root: optRoot, config: optConfig, 'fill-gaps': optFillGaps} = minimist(process.argv);
 
@@ -27,11 +25,20 @@ const wpath = resolve(optRoot);
 const configYaml = readFileSync(optConfig, 'utf8');
 const config = parse(configYaml);
 
-const rootPkg = require(join(wpath, 'package.json'));
+const jsonFile = file.bind(
+	{},
+	'utf8',
+	raw => JSON.parse(raw),
+	parsed => JSON.stringify(parsed, null, 2),
+);
 
-rootPkg.name = config.name;
+const rootPkg = jsonFile(
+	join(wpath, 'package.json'),
+);
 
-writeFileSync(join(wpath, 'package.json'), JSON.stringify(rootPkg, null, 2));
+rootPkg.content.name = config.name;
+
+rootPkg.save();
 
 for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 	process.chdir(wpath);
@@ -66,7 +73,11 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 
 			await shell`if [ ! -e ./package.json ]; then ${config.manager} init; fi`;
 
-			const pkg = await require(join(wpath, `@${wname}`, packageName, 'package.json'));
+			const pkgDir = join(wpath, `@${wname}`, packageName);
+
+			const pkg = await jsonFile(
+				join(pkgDir, 'package.json'),
+			);
 
 			pkg.name = `@${wname}/${packageName}`;
 
@@ -84,8 +95,14 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 				}) ?? [];
 
 			if (attributes) {
-				for await (const [ref, version] of Object.entries(attributes.references ?? {})) {
-					await shell`${config.manager} install ${ref}@${version} --save`;
+				for await (const [ref, {'save-peer': savePeer}] of Object.entries(attributes.references ?? {})) {
+					await shell`${
+						[config.manager, 'install', `${ref}@${config.references?.[ref]?.version ?? 'latest'}`, '--save', yn(savePeer) ? '--save-peer' : '']
+							.filter(Boolean)
+							.join(' ')
+					}`;
+
+					pkg.invalidate();
 				}
 			}
 
@@ -98,15 +115,11 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 
 				console.log('->', rpath);
 			}
-
-			writeFileSync(join(wpath, `@${wname}`, packageName, 'package.json'), JSON.stringify(pkg, null, 2));
 		} else if (optFillGaps) {
 			if (Object.entries(children).length === 0) {
 				wnode.names[apath] = '';
 
-				writeFileSync(join(originalDir, optConfig), stringify(config, {
-					nullStr: '',
-				}), 'utf8');
+				writeFileSync(join(originalDir, optConfig), stringify(config, {nullStr: ''}), 'utf8');
 			}
 		} else {
 			console.group(`[${palias}]`);
@@ -132,5 +145,29 @@ async function shell(tpl = [], ...args) {
 
 	const cmd = script.join('');
 
+	console.log('$', cmd);
+
 	spawnSync(cmd, {cwd: process.cwd(), stdio: 'inherit', shell: true});
+}
+
+function file(options, parse, serialize, path) {
+	let _content = null;
+
+	return {
+		get content() {
+			if (_content === null) {
+				_content = parse(readFileSync(path, options));
+			}
+
+			return _content;
+		},
+		invalidate() {
+			_content = null;
+		},
+		save() {
+			writeFileSync(path, serialize(_content), options);
+
+			this.invalidate();
+		},
+	};
 }
