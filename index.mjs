@@ -5,7 +5,7 @@ import {readFileSync, writeFileSync} from 'node:fs';
 import {join, resolve} from 'node:path';
 import process from 'node:process';
 import minimist from 'minimist';
-import {escapeRegExp, get} from 'lodash-es';
+import {get} from 'lodash-es';
 import {parse, stringify} from 'yaml';
 import yn from 'yn';
 
@@ -85,17 +85,7 @@ async function visitNode({config, wname, wnode, palias, packageNode, wpath, path
 
 			const [, attributes] = Object
 				.entries(wnode?.attributes ?? {})
-				.find(([pattern]) => {
-					const regex = escapeRegExp(
-						pattern
-							.replace(/\*/g, '17b4b1d2-0463-5405-9f6f-b290daca08bb')
-							.replace(/\.$/g, '751e2e0a-c3ae-5258-90ab-cadb40b7a42f'),
-					)
-						.replace('17b4b1d2-0463-5405-9f6f-b290daca08bb', '\\\\w+')
-						.replace('751e2e0a-c3ae-5258-90ab-cadb40b7a42f', '$');
-
-					return new RegExp(regex, 'gim').test(apath);
-				}) ?? [];
+				.find(([pattern]) => new RegExp(pattern, 'gim').test(apath)) ?? [];
 
 			if (attributes) {
 				for await (const [ref, {'save-peer': savePeer}] of Object.entries(attributes.references ?? {})) {
