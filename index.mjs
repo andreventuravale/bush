@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { get } from 'lodash-es'
+import { get, unset } from 'lodash-es'
 import minimist from 'minimist'
 import { spawn } from 'node:child_process'
 import { promises as fsPromises } from 'node:fs'
@@ -184,6 +184,9 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
       await pkg.modify(async content => {
         content.name = `@${wname}/${pkgName}`
+        unset(content, 'dependencies')
+        unset(content, 'devDependencies')
+        unset(content, 'peerDependencies')
       })
 
       for await (const [rpath] of Object.entries(refs)) {
@@ -212,7 +215,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       }
 
       await pkg.modify(async content => {
-        content.dependencies = sortKeys(content.dependencies)
+        if (content.dependencies) { content.dependencies = sortKeys(content.dependencies) }
         if (content.devDependencies) { content.devDependencies = sortKeys(content.devDependencies) }
         if (content.peerDependencies) { content.peerDependencies = sortKeys(content.peerDependencies) }
       })
