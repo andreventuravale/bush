@@ -62,12 +62,18 @@ for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 }
 
 async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
-	await Promise.all(
-		Object.entries(packageNodes ?? {}).map(async ([palias, packageNode]) => {
-			await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
-		}),
-	);
+	Object.entries(packageNodes ?? {}).map(async ([palias, packageNode]) => {
+		await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
+	})
 }
+
+// async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
+// 	await Promise.all(
+// 		Object.entries(packageNodes ?? {}).map(async ([palias, packageNode]) => {
+// 			await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
+// 		}),
+// 	);
+// }
 
 async function visitNode({config, wname, wnode, palias, packageNode, wpath, path}) {
 	const apath = [path, palias].filter(Boolean).join('.');
