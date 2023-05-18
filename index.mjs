@@ -47,13 +47,15 @@ await rootPkg.modify(async content => {
 
 await rootPkg.save()
 
-await installDeps(config, rootPkg, config.root?.attributes?.references)
+await assignDeps(config, rootPkg, config.root?.attributes?.references)
 
 for await (const [wname, wnode] of Object.entries(config.workspaces)) {
   await shell({ cwd: wpath })`mkdir -p \\@${wname}`
 
   await visitNodes({ config, wname, wnode, packageNodes: wnode.tree, wpath, path: '' })
 }
+
+await shell({ cwd: optRoot })`${config.manager} install`
 
 function shell ({ cwd = process.cwd() }) {
   return function (tpl = [], ...args) {
@@ -92,7 +94,7 @@ function shell ({ cwd = process.cwd() }) {
   }
 }
 
-async function installDeps (config, pkg, refs) {
+async function assignDeps (config, pkg, refs) {
   for await (
     const [
       ref,
@@ -106,20 +108,21 @@ async function installDeps (config, pkg, refs) {
 
     const isDev = isDevLocal ?? isDevGlobal ?? 'no'
 
-    await shell({ cwd: pkg.dir })`${[
-      config.manager,
-      'add',
-      `${ref}@${config.references?.[ref]?.version ?? 'latest'}`,
-      yn(savePeer)
-        ? '--save-peer'
-        : (yn(isDev)
-          ? '--save-dev'
-          : '--save-prod')
-    ]
-      .filter(Boolean)
-      .join(' ')}`
+    const prop = isDev || savePeer ? 'devDependencies' : 'dependencies'
 
-    await pkg.invalidate()
+    await pkg.modify(async content => {
+      content[prop] = content[prop] ?? {}
+
+      content[prop][ref] = `${config.references?.[ref]?.version ?? 'latest'}`
+
+      if (savePeer) {
+        content.peerDependencies = content.peerDependencies ?? {}
+
+        content.peerDependencies[ref] = `${config.references?.[ref]?.version ?? 'latest'}`
+      }
+    })
+
+    await pkg.save()
   }
 }
 
@@ -138,50 +141,43 @@ async function visitNodes ({ config, wname, wnode, packageNodes, wpath, path }) 
 // }
 
 async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, path }) {
+  const flat = yn(wnode.flat)
+
+  const fspath = [path, palias].join('/').split('.').filter(Boolean).join('/')
+
   const apath = [path, palias].filter(Boolean).join('.')
 
-  const packageName = wnode?.names[apath]
+  const pkgName = wnode?.names[apath]
+
+  const pkgDir = join(wpath, `@${wname}`, flat ? pkgName : fspath)
+
+  const pkgJsonPath = join(pkgDir, 'package.json')
 
   const children = get(wnode?.tree, apath) ?? {}
 
   const refs = get(wnode?.references, apath) ?? {}
 
   try {
-    if (packageName) {
-      await shell({ cwd: join(wpath, `@${wname}`) })`mkdir -p ${packageName}`
+    if (pkgName) {
+      await shell({ cwd: join(wpath, `@${wname}`) })`mkdir -p ${pkgDir}`
 
-      const pkgDir = join(wpath, `@${wname}`, packageName)
-
-      const pkgPath = join(pkgDir, 'package.json')
-
-      if (!await fileExists(pkgPath)) {
+      if (!await fileExists(pkgJsonPath)) {
         const tmpl = JSON.parse(config.template)
 
-        tmpl.name = `@${wname}/${packageName}`
+        tmpl.name = `@${wname}/${[wnode.prefix, pkgName].filter(Boolean).join('-')}`
 
         await writeFile(
-          pkgPath,
+          pkgJsonPath,
           JSON.stringify(tmpl, null, 2),
           'utf8'
         )
       }
 
-      const pkg = await jsonFile(pkgPath)
+      const pkg = await jsonFile(pkgJsonPath)
 
       await pkg.modify(async content => {
-        content.name = `@${wname}/${packageName}`
+        content.name = `@${wname}/${pkgName}`
       })
-
-      console.group(`[${palias}]`, ':', pkg.name)
-
-      const attributesList = Object
-        .entries(wnode?.attributes ?? {})
-        .filter(([pattern]) => apath && new RegExp(pattern, 'gim').test(apath))
-        .map(([, attributes]) => attributes)
-
-      for await (const attributes of attributesList) {
-        await installDeps(config, pkg, attributes.references, apath)
-      }
 
       for await (const [rpath] of Object.entries(refs)) {
         const rpackageName = wnode?.names[rpath]
@@ -193,6 +189,19 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
         })
 
         console.log('->', rpath)
+      }
+
+      await pkg.save()
+
+      console.group(`[${palias}]`, ':', pkg.name)
+
+      const attributesList = Object
+        .entries(wnode?.attributes ?? {})
+        .filter(([pattern]) => apath && new RegExp(pattern, 'gim').test(apath))
+        .map(([, attributes]) => attributes)
+
+      for await (const attributes of attributesList) {
+        await assignDeps(config, pkg, attributes.references, apath)
       }
     } else if (optFillGaps) {
       if (Object.entries(children).length === 0) {
