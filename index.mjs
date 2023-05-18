@@ -175,7 +175,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       console.group(`[${palias}]`, ':', pkg.name)
 
       const attributesList = Object
-        .entries(wnode?.attributes?.references ?? {})
+        .entries(wnode?.attributes ?? {})
         .filter(([pattern]) => apath && new RegExp(pattern, 'gim').test(apath))
         .map(([, attributes]) => attributes)
 
