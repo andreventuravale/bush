@@ -51,7 +51,7 @@ await rootPkg.save()
 await assignDeps(config, rootPkg, config.root?.attributes?.references)
 
 for await (const [wname, wnode] of Object.entries(config.workspaces)) {
-  await shell({ cwd: wpath })`mkdir -p \\@${wname}`
+  await shell({ cwd: wpath })`mkdir -p ${wname}`
 
   await visitNodes({ config, wname, wnode, packageNodes: wnode.tree, wpath, path: '' })
 }
@@ -171,7 +171,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       if (!await fileExists(pkgJsonPath)) {
         const tmpl = JSON.parse(config.template)
 
-        tmpl.name = `@${wname}/${pkgName}`
+        tmpl.name = `@${wnode.scope}/${pkgName}`
 
         await writeFile(
           pkgJsonPath,
@@ -183,7 +183,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       const pkg = await jsonFile(pkgJsonPath)
 
       await pkg.modify(async content => {
-        content.name = `@${wname}/${pkgName}`
+        content.name = `@${wnode.scope}/${pkgName}`
         unset(content, 'dependencies')
         unset(content, 'devDependencies')
         unset(content, 'peerDependencies')
@@ -195,7 +195,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
         await pkg.modify(async content => {
           content.dependencies = content.dependencies ?? {}
 
-          content.dependencies[`@${wname}/${rpkgName}`] = `${config.protocol}${`@${wname}/${rpkgName}`}`
+          content.dependencies[`@${wnode.scope}/${rpkgName}`] = `${config.protocol}${`@${wnode.scope}/${rpkgName}`}`
         })
 
         console.log('->', rpath)
