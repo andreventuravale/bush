@@ -238,7 +238,8 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 }
 
 function getPkgName (flat, wnode, name) {
-  return [yn(flat) ? wnode['flat-prefix'] : '', name].filter(Boolean).join('-')
+  // return [yn(flat) ? wnode['flat-prefix'] : '', name].filter(Boolean).join('-')
+  return [wnode.prefix, name].filter(Boolean).join('-')
 }
 
 async function makeFile (options, parse, serialize) {
