@@ -139,14 +139,6 @@ async function visitNodes ({ config, wname, wnode, packageNodes, wpath, path }) 
   }
 }
 
-// Async function visitNodes({config, wname, wnode, packageNodes, wpath, path}) {
-//   await Promise.all(
-//     Object.entries(packageNodes ?? {}).map(async ([palias, packageNode]) => {
-//       await visitNode({config, wname, wnode, palias, packageNode, wpath, path});
-//     }),
-//   );
-// }
-
 async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, path }) {
   const flat = yn(wnode.flat)
 
@@ -154,7 +146,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
   const apath = [path, palias].filter(Boolean).join('.')
 
-  const pkgName = getPkgName(flat, wnode, wnode.names[apath])
+  const pkgName = getPkgName(wnode, wnode.names[apath])
 
   const children = get(wnode?.tree, apath) ?? {}
 
@@ -190,7 +182,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       })
 
       for await (const [rpath] of Object.entries(refs)) {
-        const rpkgName = getPkgName(flat, wnode, wnode?.names[rpath])
+        const rpkgName = getPkgName(wnode, wnode?.names[rpath])
 
         await pkg.modify(async content => {
           content.dependencies = content.dependencies ?? {}
@@ -237,8 +229,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
   }
 }
 
-function getPkgName (flat, wnode, name) {
-  // return [yn(flat) ? wnode['flat-prefix'] : '', name].filter(Boolean).join('-')
+function getPkgName (wnode, name) {
   return [wnode.prefix, name].filter(Boolean).join('-')
 }
 
