@@ -160,13 +160,13 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
   try {
     if (wnode.names[apath]) {
-      const pkgDir = join(wpath, `@${wname}`, flat ? pkgName : fspath)
+      const pkgDir = join(wpath, wname, flat ? pkgName : fspath)
 
       const pkgJsonPath = join(pkgDir, 'package.json')
 
       const refs = get(wnode?.references, apath) ?? {}
 
-      await shell({ cwd: join(wpath, `@${wname}`) })`mkdir -p ${pkgDir}`
+      await shell({ cwd: join(wpath, wname) })`mkdir -p ${pkgDir}`
 
       if (!await fileExists(pkgJsonPath)) {
         const tmpl = JSON.parse(config.template)
