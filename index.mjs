@@ -44,7 +44,7 @@ await rootPkg.modify(async content => {
 
 await rootPkg.save()
 
-await assignDeps(config, rootPkg, config.root?.attributes?.references)
+await assignDeps(config, rootPkg, config.root?.attributes?.references, { peer: false })
 
 for await (const [wname, wnode] of Object.entries(config.workspaces)) {
   await shell({ cwd: wpath })`mkdir -p ${wname}`
@@ -117,17 +117,17 @@ function shell ({ cwd = process.cwd() }) {
   }
 }
 
-async function assignDeps (config, pkg, refs) {
+async function assignDeps (config, pkg, refs, { peer = true } = {}) {
   for await (
     const [
       ref,
       {
-        'is-dev': isDevLocal = 'no',
+        'is-dev': isDevLocal,
         'save-peer': savePeer = 'no'
       } = {}
     ] of Object.entries(refs ?? {})
   ) {
-    const isDevGlobal = yn(config.references?.[ref]?.['is-dev'])
+    const isDevGlobal = yn(config.repository?.[ref]?.['is-dev'])
     const isDev = yn(isDevLocal ?? isDevGlobal ?? 'no')
     const isPeer = yn(savePeer)
 
@@ -138,11 +138,9 @@ async function assignDeps (config, pkg, refs) {
     await pkg.modify(async content => {
       content[prop] = content[prop] ?? {}
 
-      console.log(ref, config.references?.[ref]?.version)
-
       content[prop][name] = `${config.references?.[ref]?.version ?? 'latest'}`
 
-      if (isPeer) {
+      if (peer && isPeer) {
         content.peerDependencies = content.peerDependencies ?? {}
 
         content.peerDependencies[name] = `${config.references?.[ref]?.version ?? 'latest'}`
