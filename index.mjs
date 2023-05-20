@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
-import { get, unset } from 'lodash-es'
+import { get, merge, unset } from 'lodash-es'
 import minimist from 'minimist'
 import { spawn } from 'node:child_process'
 import { promises as fsPromises } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
+import sortKeys from 'sort-keys'
 import { parse, stringify } from 'yaml'
 import yn from 'yn'
-import sortKeys from 'sort-keys'
 
 const { readFile, stat, writeFile } = fsPromises
 
@@ -26,11 +26,7 @@ if (!optConfig) {
 
 const wpath = resolve(optRoot)
 
-const configYaml = await readFile(optConfig, 'utf8')
-
-const config = parse(configYaml, {
-  reviver: (key, value) => value ?? ''
-})
+const config = await loadConfig(optConfig)
 
 const jsonFile = await makeFile(
   'utf8',
@@ -57,6 +53,27 @@ for await (const [wname, wnode] of Object.entries(config.workspaces)) {
 }
 
 await shell({ cwd: optRoot })`${config.manager} install`
+
+async function loadConfig (path) {
+  const configYaml = await readFile(path, 'utf8')
+
+  let config = parse(configYaml, {
+    reviver: (_, value) => value ?? ''
+  })
+
+  if (config['merge-with']) {
+    const config2 = await Promise.all(
+      config['merge-with']
+        .split(',')
+        .map(rel => join(process.cwd(), rel.trim()))
+        .map(path => loadConfig(path))
+    )
+
+    config = merge({}, ...config2, config)
+  }
+
+  return config
+}
 
 function shell ({ cwd = process.cwd() }) {
   return function (tpl = [], ...args) {
@@ -115,6 +132,8 @@ async function assignDeps (config, pkg, refs) {
 
     await pkg.modify(async content => {
       content[prop] = content[prop] ?? {}
+
+      console.log(ref, config.references?.[ref]?.version)
 
       content[prop][name] = `${config.references?.[ref]?.version ?? 'latest'}`
 
