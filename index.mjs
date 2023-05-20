@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { get, merge, unset } from 'lodash-es'
+import { get, isEmpty, merge, unset } from 'lodash-es'
 import minimist from 'minimist'
 import { spawn } from 'node:child_process'
 import { promises as fsPromises } from 'node:fs'
@@ -40,6 +40,12 @@ const rootPkg = jsonFile(
 
 await rootPkg.modify(async content => {
   content.name = config.name
+
+  content.scripts = config.root?.attributes?.scripts ?? {}
+
+  if (isEmpty(content.scripts)) {
+    unset(content, 'scripts')
+  }
 })
 
 await rootPkg.save()
@@ -52,7 +58,7 @@ for await (const [wname, wnode] of Object.entries(config.workspaces)) {
   await visitNodes({ config, wname, wnode, packageNodes: wnode.tree, wpath, path: '' })
 }
 
-await shell({ cwd: optRoot })`${config.manager} install`
+await shell({ cwd: optRoot })`pnpm install`
 
 async function loadConfig (path) {
   const configYaml = await readFile(path, 'utf8')
@@ -144,12 +150,12 @@ async function assignDeps (config, pkg, refs, { peer = true } = {}) {
     await pkg.modify(async content => {
       content[prop] = content[prop] ?? {}
 
-      content[prop][name] = `${config.references?.[ref]?.version ?? 'latest'}`
+      content[prop][name] = `${config.repository?.[ref]?.version ?? 'latest'}`
 
       if (peer && isPeer) {
         content.peerDependencies = content.peerDependencies ?? {}
 
-        content.peerDependencies[name] = `${config.references?.[ref]?.version ?? 'latest'}`
+        content.peerDependencies[name] = `${config.repository?.[ref]?.version ?? 'latest'}`
       }
     })
   }
