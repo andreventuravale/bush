@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { repeat } from 'lodash-es'
 import { execSync } from 'node:child_process'
 import { dirname } from 'node:path'
 
@@ -9,9 +10,9 @@ export async function bushAll () {
   const paths = text.trim().split(/[\r\n]/g)
 
   for await (const path of paths) {
-    console.log('==================================')
-    console.log(path)
-    console.log('==================================')
+    console.log(repeat('=', path.length + 4))
+    console.log(`= ${path} =`)
+    console.log(repeat('=', path.length + 4))
 
     await shell({ cwd: dirname(path), stdio: 'inherit', shell: true })`bush`
   }
