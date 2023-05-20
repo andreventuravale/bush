@@ -118,6 +118,12 @@ function shell ({ cwd = process.cwd() }) {
 }
 
 async function assignDeps (config, pkg, refs, { peer = true } = {}) {
+  await pkg.modify(async content => {
+    unset(content, 'dependencies')
+    unset(content, 'devDependencies')
+    unset(content, 'peerDependencies')
+  })
+
   for await (
     const [
       ref,
@@ -146,9 +152,15 @@ async function assignDeps (config, pkg, refs, { peer = true } = {}) {
         content.peerDependencies[name] = `${config.references?.[ref]?.version ?? 'latest'}`
       }
     })
-
-    await pkg.save()
   }
+
+  await pkg.modify(async content => {
+    if (content.dependencies) { content.dependencies = sortKeys(content.dependencies) }
+    if (content.devDependencies) { content.devDependencies = sortKeys(content.devDependencies) }
+    if (content.peerDependencies) { content.peerDependencies = sortKeys(content.peerDependencies) }
+  })
+
+  await pkg.save()
 }
 
 function unescapePackageName (name) {
@@ -198,9 +210,6 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
       await pkg.modify(async content => {
         content.name = `@${wnode.scope}/${pkgName}`
-        unset(content, 'dependencies')
-        unset(content, 'devDependencies')
-        unset(content, 'peerDependencies')
       })
 
       for await (const [rpath] of Object.entries(refs)) {
@@ -227,12 +236,6 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       for await (const attributes of attributesList) {
         await assignDeps(config, pkg, attributes.references, apath)
       }
-
-      await pkg.modify(async content => {
-        if (content.dependencies) { content.dependencies = sortKeys(content.dependencies) }
-        if (content.devDependencies) { content.devDependencies = sortKeys(content.devDependencies) }
-        if (content.peerDependencies) { content.peerDependencies = sortKeys(content.peerDependencies) }
-      })
 
       await pkg.save()
     } else if (optFillGaps) {
