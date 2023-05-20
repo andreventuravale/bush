@@ -105,23 +105,23 @@ async function assignDeps (config, pkg, refs) {
       } = {}
     ] of Object.entries(refs ?? {})
   ) {
-    const isDevGlobal = config.references?.[ref]?.['is-dev']
+    const isDevGlobal = yn(config.references?.[ref]?.['is-dev'])
+    const isDev = yn(isDevLocal ?? isDevGlobal ?? 'no')
+    const isPeer = yn(savePeer)
 
-    const isDev = isDevLocal ?? isDevGlobal ?? 'no'
-
-    const prop = isDev || savePeer ? 'devDependencies' : 'dependencies'
+    const prop = isDev || isPeer ? 'devDependencies' : 'dependencies'
 
     const name = unescapePackageName(ref)
 
     await pkg.modify(async content => {
       content[prop] = content[prop] ?? {}
 
-      content[prop][name] = `${config.references?.[name]?.version ?? 'latest'}`
+      content[prop][name] = `${config.references?.[ref]?.version ?? 'latest'}`
 
-      if (savePeer) {
+      if (isPeer) {
         content.peerDependencies = content.peerDependencies ?? {}
 
-        content.peerDependencies[name] = `${config.references?.[name]?.version ?? 'latest'}`
+        content.peerDependencies[name] = `${config.references?.[ref]?.version ?? 'latest'}`
       }
     })
 
