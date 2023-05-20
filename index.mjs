@@ -3,15 +3,14 @@
 import { get, isEmpty, merge, unset } from 'lodash-es'
 import minimist from 'minimist'
 import { spawn } from 'node:child_process'
-import { promises as fsPromises } from 'node:fs'
+import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import sortKeys from 'sort-keys'
 import { parse, stringify } from 'yaml'
 import yn from 'yn'
 import { bushAll } from './bush-all.mjs'
-
-const { readFile, stat, writeFile } = fsPromises
+import { fileExists } from './fileExists.mjs'
 
 let { recursive, root: optRoot, config: optConfig, 'fill-gaps': optFillGaps } = minimist(process.argv)
 
@@ -322,15 +321,5 @@ async function makeFile (options, parse, serialize) {
         await this.invalidate()
       }
     }
-  }
-}
-
-export async function fileExists (path) {
-  try {
-    await stat(path)
-
-    return true
-  } catch {
-    return false
   }
 }

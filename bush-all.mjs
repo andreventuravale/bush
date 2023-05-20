@@ -2,7 +2,8 @@
 
 import { repeat } from 'lodash-es'
 import { execSync } from 'node:child_process'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
+import { fileExists } from './fileExists.mjs'
 
 export async function bushAll () {
   const text = await shell()`find . | grep bush.yaml | grep -v node_modules`
@@ -10,6 +11,10 @@ export async function bushAll () {
   const paths = text.trim().split(/[\r\n]/g)
 
   for await (const path of paths) {
+    if (!await fileExists(join(dirname(path), 'package.json'))) {
+      continue
+    }
+
     console.log(repeat('=', path.length + 4))
     console.log(`= ${path} =`)
     console.log(repeat('=', path.length + 4))
