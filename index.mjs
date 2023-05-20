@@ -61,12 +61,17 @@ async function loadConfig (path) {
     reviver: (_, value) => value ?? ''
   })
 
-  if (config['merge-with']) {
+  const mergeWith = config['merge-with']
+
+  unset(config, 'merge-with')
+
+  if (mergeWith) {
     const config2 = await Promise.all(
-      config['merge-with']
+      mergeWith
+        .trim()
         .split(',')
-        .map(rel => join(process.cwd(), rel.trim()))
-        .map(path => loadConfig(path))
+        .map(rel => join(dirname(path), rel.trim()))
+        .map(p => loadConfig(p))
     )
 
     config = merge({}, ...config2, config)
