@@ -5,7 +5,7 @@ import { execSync } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import { fileExists } from './fileExists.mjs'
 
-export async function bushAll () {
+export async function bushRecursive () {
   const text = await shell()`find . | grep bush.yaml | grep -v node_modules`
 
   const paths = text.trim().split(/[\r\n]/g)

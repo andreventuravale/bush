@@ -9,13 +9,13 @@ import process from 'node:process'
 import sortKeys from 'sort-keys'
 import { parse, stringify } from 'yaml'
 import yn from 'yn'
-import { bushAll } from './bush-all.mjs'
 import { fileExists } from './fileExists.mjs'
+import { bushRecursive } from './recursive.mjs'
 
 let { recursive, root: optRoot, config: optConfig, 'fill-gaps': optFillGaps } = minimist(process.argv)
 
 if (yn(recursive)) {
-  await bushAll()
+  await bushRecursive()
 
   process.exit(0)
 }
