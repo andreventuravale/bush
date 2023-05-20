@@ -9,10 +9,17 @@ import process from 'node:process'
 import sortKeys from 'sort-keys'
 import { parse, stringify } from 'yaml'
 import yn from 'yn'
+import { bushAll } from './bush-all.mjs'
 
 const { readFile, stat, writeFile } = fsPromises
 
-let { root: optRoot, config: optConfig, 'fill-gaps': optFillGaps } = minimist(process.argv)
+let { recursive, root: optRoot, config: optConfig, 'fill-gaps': optFillGaps } = minimist(process.argv)
+
+if (yn(recursive)) {
+  await bushAll()
+
+  process.exit(0)
+}
 
 if (!optRoot) {
   optRoot = '.'
