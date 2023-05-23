@@ -1,26 +1,26 @@
-#!/usr/bin/env node
+const { repeat } = require('lodash')
+const { execSync } = require('node:child_process')
+const { dirname, join } = require('node:path')
+const { fileExists } = require('./fileExists.js')
 
-import { repeat } from 'lodash-es'
-import { execSync } from 'node:child_process'
-import { dirname, join } from 'node:path'
-import { fileExists } from './fileExists.mjs'
-
-export async function bushRecursive () {
+module.exports = async function bushRecursive () {
   const text = await shell()`find . | grep bush.yaml | grep -v node_modules`
 
   const paths = text.trim().split(/[\r\n]/g)
 
-  for await (const path of paths) {
-    if (!await fileExists(join(dirname(path), 'package.json'))) {
-      continue
-    }
+  await Promise.all(
+    paths.map(async path => {
+      if (!await fileExists(join(dirname(path), 'package.json'))) {
+        return
+      }
 
-    console.log(repeat('=', path.length + 4))
-    console.log(`= ${path} =`)
-    console.log(repeat('=', path.length + 4))
+      console.log(repeat('=', path.length + 4))
+      console.log(`= ${path} =`)
+      console.log(repeat('=', path.length + 4))
 
-    await shell({ cwd: dirname(path), stdio: 'inherit', shell: true })`bush`
-  }
+      await shell({ cwd: dirname(path), stdio: 'inherit', shell: true })`bush`
+    })
+  )
 }
 
 function shell (options) {

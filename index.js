@@ -1,70 +1,82 @@
 #!/usr/bin/env node
 
-import { get, isEmpty, merge, unset } from 'lodash-es'
-import minimist from 'minimist'
-import { spawn } from 'node:child_process'
-import { readFile, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
-import process from 'node:process'
-import sortKeys from 'sort-keys'
-import { parse, stringify } from 'yaml'
-import yn from 'yn'
-import { fileExists } from './fileExists.mjs'
-import { bushRecursive } from './recursive.mjs'
-
-let { recursive, root: optRoot, config: optConfig, 'fill-gaps': optFillGaps } = minimist(process.argv)
-
-if (yn(recursive)) {
-  await bushRecursive()
-
-  process.exit(0)
-}
-
-if (!optRoot) {
-  optRoot = '.'
-}
+const { get, isEmpty, merge, unset } = require('lodash')
+const minimist = require('minimist')
+const { spawn } = require('node:child_process')
+const { readFile, writeFile } = require('node:fs/promises')
+const { dirname, join, resolve } = require('node:path')
+const process = require('node:process')
+const sortKeys = require('sort-keys')
+const { parse, stringify } = require('yaml')
+const yn = require('yn')
+const { fileExists } = require('./fileExists.js')
+const { bushRecursive } = require('./recursive.js')
 
 const originalDir = process.cwd()
 
-if (!optConfig) {
-  optConfig = './bush.yaml'
-}
-
-const wpath = resolve(optRoot)
-
-const config = await loadConfig(optConfig)
-
-const jsonFile = await makeFile(
+const jsonFile = makeFile(
   'utf8',
   async raw => JSON.parse(raw),
   async parsed => JSON.stringify(parsed, null, 2)
 )
 
-const rootPkg = jsonFile(
-  join(wpath, 'package.json')
-)
+let { recursive, root: optRoot, config: optConfig, 'fill-gaps': optFillGaps } = minimist(process.argv)
 
-await rootPkg.modify(async content => {
-  content.name = config.name
+async function run () {
+  if (yn(recursive)) {
+    await bushRecursive()
 
-  content.scripts = config.root?.attributes?.scripts ?? {}
-
-  if (isEmpty(content.scripts)) {
-    unset(content, 'scripts')
+    process.exit(0)
   }
-})
 
-await rootPkg.save()
+  if (!optConfig) {
+    optConfig = './bush.yaml'
+  }
 
-await assignDeps(config, rootPkg, config.root?.attributes?.references, { peer: false })
+  const config = await loadConfig(optConfig)
 
-for await (const [wname, wnode] of Object.entries(config.workspaces)) {
-  await shell({ cwd: wpath })`mkdir -p ${wname}`
+  if (!optRoot) {
+    optRoot = config['start-location'] ?? '.'
+  }
 
-  await visitNodes({ config, wname, wnode, packageNodes: wnode.tree, wpath, path: '' })
+  const rootPath = resolve(optRoot)
+
+  const wpath = resolve(optRoot)
+
+  process.chdir(optRoot)
+
+  console.log(process.cwd())
+
+  const rootPkg = jsonFile(
+    join(wpath, 'package.json')
+  )
+
+  await rootPkg.modify(async content => {
+    content.name = unescapePackageName(config.name)
+
+    content.scripts = config.root?.attributes?.scripts ?? {}
+
+    if (isEmpty(content.scripts)) {
+      unset(content, 'scripts')
+    }
+  })
+
+  await rootPkg.save()
+
+  await unsetDeps(rootPkg)
+
+  await assignDeps(config, rootPkg, config.root?.attributes?.references, { peer: false })
+
+  for await (const [wname, wnode] of Object.entries(config.workspaces)) {
+    await shell({ cwd: wpath })`mkdir -p ${wname}`
+
+    await visitNodes({ config, wname, wnode, packageNodes: wnode.tree, wpath, path: '' })
+  }
+
+  await shell({ cwd: rootPath })`pnpm install`
 }
 
-await shell({ cwd: optRoot })`pnpm install`
+run().catch(console.error)
 
 async function loadConfig (path) {
   const configYaml = await readFile(path, 'utf8')
@@ -129,13 +141,15 @@ function shell ({ cwd = process.cwd() }) {
   }
 }
 
-async function assignDeps (config, pkg, refs, { peer = true } = {}) {
+async function unsetDeps (pkg) {
   await pkg.modify(async content => {
     unset(content, 'dependencies')
     unset(content, 'devDependencies')
     unset(content, 'peerDependencies')
   })
+}
 
+async function assignDeps (config, pkg, refs, { peer = true } = {}) {
   for await (
     const [
       ref,
@@ -220,6 +234,8 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
       const pkg = await jsonFile(pkgJsonPath)
 
+      await unsetDeps(pkg)
+
       await pkg.modify(async content => {
         content.name = `@${wnode.scope}/${pkgName}`
       })
@@ -270,7 +286,7 @@ function getPkgName (wnode, name) {
   return [wnode.prefix, name].filter(Boolean).join('-')
 }
 
-async function makeFile (options, parse, serialize) {
+function makeFile (options, parse, serialize) {
   return path => {
     let content = null
 
