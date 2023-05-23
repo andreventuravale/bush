@@ -52,7 +52,9 @@ async function run () {
   )
 
   await rootPkg.modify(async content => {
-    content.name = unescapePackageName(config.name)
+    if (config.name) {
+      content.name = unescapePackageName(config.name)
+    }
 
     content.scripts = config.root?.attributes?.scripts ?? {}
 
@@ -155,13 +157,15 @@ async function assignDeps (config, pkg, refs, { peer = true } = {}) {
       ref,
       {
         'is-dev': isDevLocal,
-        'save-peer': savePeer = 'no'
+        'save-peer': savePeer = 'no',
+        version: localVersion
       } = {}
     ] of Object.entries(refs ?? {})
   ) {
     const isDevGlobal = yn(config.repository?.[ref]?.['is-dev'])
     const isDev = yn(isDevLocal ?? isDevGlobal ?? 'no')
     const isPeer = yn(savePeer)
+    const version = localVersion ?? config.repository?.[ref]?.version ?? 'latest'
 
     const prop = isDev || isPeer ? 'devDependencies' : 'dependencies'
 
@@ -170,12 +174,12 @@ async function assignDeps (config, pkg, refs, { peer = true } = {}) {
     await pkg.modify(async content => {
       content[prop] = content[prop] ?? {}
 
-      content[prop][name] = `${config.repository?.[ref]?.version ?? 'latest'}`
+      content[prop][name] = `${version}`
 
       if (peer && isPeer) {
         content.peerDependencies = content.peerDependencies ?? {}
 
-        content.peerDependencies[name] = `${config.repository?.[ref]?.version ?? 'latest'}`
+        content.peerDependencies[name] = `${version}`
       }
     })
   }
