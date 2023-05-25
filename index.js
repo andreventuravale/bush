@@ -7,12 +7,10 @@ const { readFile, writeFile } = require('node:fs/promises')
 const { dirname, join, resolve } = require('node:path')
 const process = require('node:process')
 const sortKeys = require('sort-keys')
-const { parse, stringify } = require('yaml')
+const { parse } = require('yaml')
 const yn = require('yn')
 const { fileExists } = require('./fileExists.js')
 const { bushRecursive } = require('./recursive.js')
-
-const originalDir = process.cwd()
 
 const jsonFile = makeFile(
   'utf8',
@@ -20,7 +18,7 @@ const jsonFile = makeFile(
   async parsed => JSON.stringify(parsed, null, 2)
 )
 
-let { recursive, root: optRoot, config: optConfig, 'fill-gaps': optFillGaps } = minimist(process.argv)
+let { recursive, root: optRoot, config: optConfig } = minimist(process.argv)
 
 async function run () {
   if (yn(recursive)) {
@@ -56,7 +54,7 @@ async function run () {
       content.name = unescapePackageName(config.name)
     }
 
-    content.scripts = config.root?.attributes?.scripts ?? {}
+    content.scripts = config.root?.scripts ?? {}
 
     if (isEmpty(content.scripts)) {
       unset(content, 'scripts')
@@ -195,16 +193,20 @@ async function assignExternalDeps (config, pkg, refs = {}, { peer = true } = {})
 
 async function assignLocalDeps (config, wnode, pkg, localRefs = {}) {
   for await (const [rpath] of Object.entries(localRefs)) {
-    const rpkgName = getPkgName(wnode, rpath)
+    const rpkgName = getPkgName(config, wnode, rpath)
 
     await pkg.modify(async (content) => {
       content.dependencies = content.dependencies ?? {}
 
-      content.dependencies[`@${wnode.attributes.scope}/${rpkgName}`] = `${config.protocol}${`@${wnode.attributes.scope}/${rpkgName}`}`
+      content.dependencies[`@${getAttr(config, wnode, 'scope')}/${rpkgName}`] = `${config.protocol}${config.protocol === 'workspace:' ? '*' : `@${getAttr(config, wnode, 'scope')}/${rpkgName}`}`
     })
 
     console.log('->', rpath)
   }
+}
+
+function getAttr (config, wnode, name, defaultValue) {
+  return config.attributes?.[name] ?? wnode.attributes?.[name] ?? defaultValue
 }
 
 function unescapePackageName (name) {
@@ -218,15 +220,13 @@ async function visitNodes ({ config, wname, wnode, packageNodes, wpath, path }) 
 }
 
 async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, path }) {
-  const flat = yn(wnode.attributes.flat)
+  const flat = yn(getAttr(config, wnode, 'flat'))
 
   const fspath = [path, palias].join('/').split('.').filter(Boolean).join('/')
 
   const apath = [path, palias].filter(Boolean).join('.')
 
-  const pkgName = getPkgName(wnode, apath)
-
-  const children = get(wnode?.tree, apath) ?? {}
+  const pkgName = getPkgName(config, wnode, apath)
 
   const isLeaf = !packageNode
 
@@ -243,7 +243,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       if (!await fileExists(pkgJsonPath)) {
         const tmpl = JSON.parse(config.template)
 
-        tmpl.name = `@${wnode.attributes.scope}/${pkgName}`
+        tmpl.name = `@${getAttr(config, wnode, 'scope')}/${pkgName}`
 
         await writeFile(
           pkgJsonPath,
@@ -257,7 +257,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       await unsetDeps(pkg)
 
       await pkg.modify(async content => {
-        content.name = `@${wnode.attributes.scope}/${pkgName}`
+        content.name = `@${getAttr(config, wnode, 'scope')}/${pkgName}`
       })
 
       await assignLocalDeps(config, wnode, pkg, localRefs)
@@ -283,10 +283,6 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       }
 
       await pkg.save()
-    } else if (optFillGaps) {
-      if (Object.entries(children).length === 0) {
-        await writeFile(join(originalDir, optConfig), stringify(config, { nullStr: '' }), 'utf8')
-      }
     } else {
       console.group(`[${palias}]`)
     }
@@ -297,8 +293,8 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
   }
 }
 
-function getPkgName (wnode, name) {
-  return [wnode.attributes.prefix, name].filter(Boolean).join('-').replace(/\./g, '-')
+function getPkgName (config, wnode, name) {
+  return [getAttr(config, wnode, 'prefix'), name].filter(Boolean).join('-').replace(/\./g, '-')
 }
 
 function makeFile (options, parse, serialize) {
