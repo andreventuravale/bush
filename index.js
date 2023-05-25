@@ -67,7 +67,7 @@ async function run () {
 
   await unsetDeps(rootPkg)
 
-  await assignDeps(config, rootPkg, config.root?.attributes?.references, { peer: false })
+  await assignExternalDeps(config, rootPkg, config.root?.references?.external, { peer: false })
 
   for await (const [wname, wnode] of Object.entries(config.workspaces)) {
     await shell({ cwd: wpath })`mkdir -p ${wname}`
@@ -151,7 +151,7 @@ async function unsetDeps (pkg) {
   })
 }
 
-async function assignDeps (config, pkg, refs, { peer = true } = {}) {
+async function assignExternalDeps (config, pkg, refs = {}, { peer = true } = {}) {
   for await (
     const [
       ref,
@@ -162,10 +162,10 @@ async function assignDeps (config, pkg, refs, { peer = true } = {}) {
       } = {}
     ] of Object.entries(refs ?? {})
   ) {
-    const isDevGlobal = yn(config.repository?.[ref]?.['is-dev'])
+    const isDevGlobal = yn(config.packages?.[ref]?.['is-dev'])
     const isDev = yn(isDevLocal ?? isDevGlobal ?? 'no')
     const isPeer = yn(savePeer)
-    const version = localVersion ?? config.repository?.[ref]?.version ?? 'latest'
+    const version = localVersion ?? config.packages?.[ref]?.version ?? 'latest'
 
     const prop = isDev || isPeer ? 'devDependencies' : 'dependencies'
 
@@ -193,6 +193,20 @@ async function assignDeps (config, pkg, refs, { peer = true } = {}) {
   await pkg.save()
 }
 
+async function assignLocalDeps (config, wnode, pkg, localRefs = {}) {
+  for await (const [rpath] of Object.entries(localRefs)) {
+    const rpkgName = getPkgName(wnode, rpath)
+
+    await pkg.modify(async (content) => {
+      content.dependencies = content.dependencies ?? {}
+
+      content.dependencies[`@${wnode.attributes.scope}/${rpkgName}`] = `${config.protocol}${`@${wnode.attributes.scope}/${rpkgName}`}`
+    })
+
+    console.log('->', rpath)
+  }
+}
+
 function unescapePackageName (name) {
   return name.replace('\\@', '@')
 }
@@ -204,30 +218,32 @@ async function visitNodes ({ config, wname, wnode, packageNodes, wpath, path }) 
 }
 
 async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, path }) {
-  const flat = yn(wnode.flat)
+  const flat = yn(wnode.attributes.flat)
 
   const fspath = [path, palias].join('/').split('.').filter(Boolean).join('/')
 
   const apath = [path, palias].filter(Boolean).join('.')
 
-  const pkgName = getPkgName(wnode, wnode.names[apath])
+  const pkgName = getPkgName(wnode, apath)
 
   const children = get(wnode?.tree, apath) ?? {}
 
+  const isLeaf = !packageNode
+
   try {
-    if (wnode.names[apath]) {
+    if (isLeaf) {
       const pkgDir = join(wpath, wname, flat ? pkgName : fspath)
 
       const pkgJsonPath = join(pkgDir, 'package.json')
 
-      const refs = get(wnode?.references, apath) ?? {}
+      const localRefs = get(wnode?.references?.local, apath) ?? {}
 
       await shell({ cwd: join(wpath, wname) })`mkdir -p ${pkgDir}`
 
       if (!await fileExists(pkgJsonPath)) {
         const tmpl = JSON.parse(config.template)
 
-        tmpl.name = `@${wnode.scope}/${pkgName}`
+        tmpl.name = `@${wnode.attributes.scope}/${pkgName}`
 
         await writeFile(
           pkgJsonPath,
@@ -241,39 +257,34 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
       await unsetDeps(pkg)
 
       await pkg.modify(async content => {
-        content.name = `@${wnode.scope}/${pkgName}`
+        content.name = `@${wnode.attributes.scope}/${pkgName}`
       })
 
-      for await (const [rpath] of Object.entries(refs)) {
-        const rpkgName = getPkgName(wnode, wnode?.names[rpath])
-
-        await pkg.modify(async content => {
-          content.dependencies = content.dependencies ?? {}
-
-          content.dependencies[`@${wnode.scope}/${rpkgName}`] = `${config.protocol}${`@${wnode.scope}/${rpkgName}`}`
-        })
-
-        console.log('->', rpath)
-      }
+      await assignLocalDeps(config, wnode, pkg, localRefs)
 
       await pkg.save()
 
       console.group(`[${palias}]`, ':', await pkg.get(({ name }) => name) ?? '?')
 
-      const attributesList = Object
-        .entries(wnode?.attributes ?? {})
-        .filter(([pattern]) => apath && new RegExp(pattern, 'gim').test(apath))
-        .map(([, attributes]) => attributes)
+      const refsList = Object
+        .entries(wnode?.references?.external ?? {})
+        .filter(([nameOrPattern]) => apath && (
+          (
+            nameOrPattern.startsWith('/') &&
+            nameOrPattern.endsWith('/') &&
+            new RegExp(nameOrPattern, 'gim').test(apath)
+          ) ||
+          (nameOrPattern === apath)
+        ))
+        .map(([, refs]) => refs)
 
-      for await (const attributes of attributesList) {
-        await assignDeps(config, pkg, attributes.references, apath)
+      for await (const refs of refsList) {
+        await assignExternalDeps(config, pkg, refs, apath)
       }
 
       await pkg.save()
     } else if (optFillGaps) {
       if (Object.entries(children).length === 0) {
-        wnode.names[apath] = ''
-
         await writeFile(join(originalDir, optConfig), stringify(config, { nullStr: '' }), 'utf8')
       }
     } else {
@@ -287,7 +298,7 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 }
 
 function getPkgName (wnode, name) {
-  return [wnode.prefix, name].filter(Boolean).join('-')
+  return [wnode.attributes.prefix, name].filter(Boolean).join('-').replace(/\./g, '-')
 }
 
 function makeFile (options, parse, serialize) {
