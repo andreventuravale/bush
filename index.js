@@ -1,16 +1,17 @@
 #!/usr/bin/env node
 
-const { get, isEmpty, merge, unset } = require('lodash')
-const minimist = require('minimist')
-const { spawn } = require('node:child_process')
-const { readFile, writeFile } = require('node:fs/promises')
+const { bushRecursive } = require('./recursive.js')
 const { dirname, join, resolve } = require('node:path')
+const { fileExists } = require('./fileExists.js')
+const { isEmpty, merge, unset } = require('lodash')
+const { parse } = require('yaml')
+const { readFile, writeFile } = require('node:fs/promises')
+const { sortPackageJson } = require('sort-package-json')
+const { spawn } = require('node:child_process')
+const minimist = require('minimist')
 const process = require('node:process')
 const sortKeys = require('sort-keys')
-const { parse } = require('yaml')
 const yn = require('yn')
-const { fileExists } = require('./fileExists.js')
-const { bushRecursive } = require('./recursive.js')
 
 const jsonFile = makeFile(
   'utf8',
@@ -60,6 +61,8 @@ async function run () {
       unset(content, 'scripts')
     }
   })
+
+  await rootPkg.modify(json => sortPackageJson(json))
 
   await rootPkg.save()
 
@@ -120,9 +123,7 @@ function shell ({ cwd = process.cwd() }) {
 
       const cmd = script.join('')
 
-      console.log('$', cmd)
-
-      const proc = spawn(cmd, { cwd, stdio: 'inherit', shell: true })
+      const proc = spawn(cmd, { cwd, stdio: 'ignore', shell: true })
 
       let error
 
@@ -191,17 +192,35 @@ async function assignExternalDeps (config, pkg, refs = {}, { peer = true } = {})
   await pkg.save()
 }
 
-async function assignLocalDeps (config, wnode, pkg, localRefs = {}) {
-  for await (const [rpath] of Object.entries(localRefs)) {
-    const rpkgName = getPkgName(config, wnode, rpath)
+async function assignLocalDeps (config, wnode, wname, apath, pkg) {
+  const refsList = matchRefs(wnode, apath, 'workspace')
 
-    await pkg.modify(async (content) => {
-      content.dependencies = content.dependencies ?? {}
+  for await (const refs of refsList) {
+    for await (const [ref] of Object.entries(refs)) {
+      const [rworkspace, rpath] = (
+        ref.includes('@')
+          ? ref
+          : `${wname}@${ref}`
+      ).split('@')
 
-      content.dependencies[`@${getAttr(config, wnode, 'scope')}/${rpkgName}`] = `${config.protocol}${config.protocol === 'workspace:' ? '*' : `@${getAttr(config, wnode, 'scope')}/${rpkgName}`}`
-    })
+      const rwnode = config.workspaces[rworkspace]
 
-    console.log('->', rpath)
+      const rpkgName = getPkgName(config, rwnode, rpath)
+
+      const depName = `@${getAttr(config, rwnode, 'scope')}/${rpkgName}`
+
+      if (depName === await pkg.get(({ name }) => name)) {
+        continue
+      }
+
+      await pkg.modify(async (content) => {
+        content.dependencies = content.dependencies ?? {}
+
+        content.dependencies[depName] = `${config.protocol}${config.protocol === 'workspace:' ? '*' : `@${getAttr(config, rwnode, 'scope')}/${rpkgName}`}`
+      })
+
+      console.log(wname, ':', '  >', rpath)
+    }
   }
 }
 
@@ -226,71 +245,73 @@ async function visitNode ({ config, wname, wnode, palias, packageNode, wpath, pa
 
   const apath = [path, palias].filter(Boolean).join('.')
 
+  console.log(wname, ':', apath)
+
   const pkgName = getPkgName(config, wnode, apath)
 
   const isLeaf = !packageNode
 
-  try {
-    if (isLeaf) {
-      const pkgDir = join(wpath, wname, flat ? pkgName : fspath)
+  if (isLeaf) {
+    const pkgDir = join(wpath, wname, flat ? pkgName : fspath)
 
-      const pkgJsonPath = join(pkgDir, 'package.json')
+    const pkgJsonPath = join(pkgDir, 'package.json')
 
-      const localRefs = get(wnode?.references?.local, apath) ?? {}
+    await shell({ cwd: join(wpath, wname) })`mkdir -p ${pkgDir}`
 
-      await shell({ cwd: join(wpath, wname) })`mkdir -p ${pkgDir}`
+    if (!await fileExists(pkgJsonPath)) {
+      const tmpl = JSON.parse(config.template)
 
-      if (!await fileExists(pkgJsonPath)) {
-        const tmpl = JSON.parse(config.template)
+      tmpl.name = `@${getAttr(config, wnode, 'scope')}/${pkgName}`
 
-        tmpl.name = `@${getAttr(config, wnode, 'scope')}/${pkgName}`
-
-        await writeFile(
-          pkgJsonPath,
-          JSON.stringify(tmpl, null, 2),
-          'utf8'
-        )
-      }
-
-      const pkg = await jsonFile(pkgJsonPath)
-
-      await unsetDeps(pkg)
-
-      await pkg.modify(async content => {
-        content.name = `@${getAttr(config, wnode, 'scope')}/${pkgName}`
-      })
-
-      await assignLocalDeps(config, wnode, pkg, localRefs)
-
-      await pkg.save()
-
-      console.group(`[${palias}]`, ':', await pkg.get(({ name }) => name) ?? '?')
-
-      const refsList = Object
-        .entries(wnode?.references?.external ?? {})
-        .filter(([nameOrPattern]) => apath && (
-          (
-            nameOrPattern.startsWith('/') &&
-            nameOrPattern.endsWith('/') &&
-            new RegExp(nameOrPattern, 'gim').test(apath)
-          ) ||
-          (nameOrPattern === apath)
-        ))
-        .map(([, refs]) => refs)
-
-      for await (const refs of refsList) {
-        await assignExternalDeps(config, pkg, refs, apath)
-      }
-
-      await pkg.save()
-    } else {
-      console.group(`[${palias}]`)
+      await writeFile(
+        pkgJsonPath,
+        JSON.stringify(tmpl, null, 2),
+        'utf8'
+      )
     }
 
-    await visitNodes({ config, wname, wnode, packageNodes: packageNode, wpath, path: apath })
-  } finally {
-    console.groupEnd()
+    const pkg = await jsonFile(pkgJsonPath)
+
+    await unsetDeps(pkg)
+
+    await pkg.modify(async content => {
+      content.name = `@${getAttr(config, wnode, 'scope')}/${pkgName}`
+    })
+
+    await pkg.save()
+
+    await assignLocalDeps(config, wnode, wname, apath, pkg)
+
+    await pkg.save()
+
+    const externalRefsList = matchRefs(wnode, apath, 'external')
+
+    for await (const refs of externalRefsList) {
+      await assignExternalDeps(config, pkg, refs, apath)
+    }
+
+    await pkg.modify(json => sortPackageJson(json))
+
+    await pkg.save()
   }
+
+  await visitNodes({ config, wname, wnode, packageNodes: packageNode, wpath, path: apath })
+}
+
+function matchRefs (wnode, apath, type) {
+  return Object
+    .entries(wnode?.references?.[type] ?? {})
+    .filter(([nameOrPattern]) => {
+      return (apath) && (
+        (
+          nameOrPattern.startsWith('/') &&
+          nameOrPattern.endsWith('/') &&
+          new RegExp(nameOrPattern.slice(1, -1), 'gim').test(apath)
+        ) ||
+        (nameOrPattern === apath)
+      )
+    })
+    .map(([, refs]) => refs)
 }
 
 function getPkgName (config, wnode, name) {

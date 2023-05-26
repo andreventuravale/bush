@@ -10,17 +10,18 @@
     "lodash": "^4.17.21",
     "minimist": "^1.2.8",
     "sort-keys": "4.0.0",
+    "sort-package-json": "1.57.0",
     "yaml": "^2.2.2",
     "yn": "4.0.0",
     "zod": "^3.21.4"
+  },
+  "devDependencies": {
+    "standard": "^17.0.0"
   },
   "main": "index.mjs",
   "name": "bush",
   "scripts": {
     "lint": "standard --fix"
   },
-  "version": "0.0.0",
-  "devDependencies": {
-    "standard": "^17.0.0"
-  }
+  "version": "0.0.0"
 }
